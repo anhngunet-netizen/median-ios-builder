@@ -4,15 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
+        description: "Tên hiển thị của ứng dụng"
         required: true
         default: "EduKit App"
       bundle_id:
+        description: "iOS Bundle Identifier"
         required: true
         default: "vn.edukit.ios"
       marketing_version:
+        description: "Phiên bản (CFBundleShortVersionString)"
         required: true
         default: "1.0.0"
       project_version:
+        description: "Build number (CFBundleVersion)"
         required: true
         default: "1"
 
@@ -22,12 +26,14 @@ jobs:
     defaults:
       run:
         working-directory: ios
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Cài đặt Tuist
-        run: |
-          curl -Ls https://install.tuist.io | bash
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+        run: brew install --cask tuist
+
       - name: Sinh Xcode Workspace bằng Tuist
         env:
           TUIST_PROJECT_NAME: MedianIOS
@@ -40,18 +46,36 @@ jobs:
           rm -f ~/.swiftpm/security/fingerprints/median.go-native-core.json || true
           tuist install || true
           tuist generate --no-open
-      - name: Build ứng dụng (Unsigned .ipa)
+          mkdir -p ~/.swiftpm/configuration MedianIOS.xcworkspace/xcshareddata/swiftpm/configuration
+          if [ -f EduKitCngcvphnmmd.xcworkspace/xcshareddata/swiftpm/configuration/registries.json ]; then
+            cp EduKitCngcvphnmmd.xcworkspace/xcshareddata/swiftpm/configuration/registries.json ~/.swiftpm/configuration/registries.json
+            cp EduKitCngcvphnmmd.xcworkspace/xcshareddata/swiftpm/configuration/registries.json MedianIOS.xcworkspace/xcshareddata/swiftpm/configuration/registries.json
+          fi
+
+      - name: Build ứng dụng (Unsigned .xcarchive & đóng gói .ipa)
         env:
           TUIST_APP_NAME: ${{ github.event.inputs.app_name }}
           TUIST_BUNDLE_ID: ${{ github.event.inputs.bundle_id }}
           TUIST_MARKETING_VERSION: ${{ github.event.inputs.marketing_version }}
           TUIST_PROJECT_VERSION: ${{ github.event.inputs.project_version }}
         run: |
-          xcodebuild -workspace MedianIOS.xcworkspace -scheme Median -configuration Release -sdk iphoneos -archivePath build/App.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" archive
+          xcodebuild \
+            -workspace MedianIOS.xcworkspace \
+            -scheme Median \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/App.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            archive
+
           mkdir -p build/Payload
           cp -R build/App.xcarchive/Products/Applications/*.app build/Payload/
           cd build && zip -r App-unsigned.ipa Payload
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
         with:
           name: iOS-IPA-${{ github.event.inputs.bundle_id }}
           path: ios/build/App-unsigned.ipa
