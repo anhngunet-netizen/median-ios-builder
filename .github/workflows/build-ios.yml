@@ -1,7 +1,55 @@
-echo "# median-ios-builder" >> README.md
-git init
-git add README.md
-git commit -m "first commit"
-git branch -M main
-git remote add origin https://github.com/anhngunet-netizen/median-ios-builder.git
-git push -u origin main
+name: Build iOS App (Tuist)
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        required: true
+        default: "EduKit App"
+      bundle_id:
+        required: true
+        default: "vn.edukit.ios"
+      marketing_version:
+        required: true
+        default: "1.0.0"
+      project_version:
+        required: true
+        default: "1"
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cài đặt Tuist
+        run: |
+          curl -Ls https://install.tuist.io | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: Sinh Xcode Workspace bằng Tuist
+        env:
+          TUIST_PROJECT_NAME: MedianIOS
+          TUIST_TARGET_NAME: Median
+          TUIST_BUNDLE_ID: ${{ github.event.inputs.bundle_id }}
+          TUIST_APP_NAME: ${{ github.event.inputs.app_name }}
+          TUIST_MARKETING_VERSION: ${{ github.event.inputs.marketing_version }}
+          TUIST_PROJECT_VERSION: ${{ github.event.inputs.project_version }}
+        run: |
+          rm -f ~/.swiftpm/security/fingerprints/median.go-native-core.json || true
+          tuist install || true
+          tuist generate --no-open
+      - name: Build ứng dụng (Unsigned .ipa)
+        env:
+          TUIST_APP_NAME: ${{ github.event.inputs.app_name }}
+          TUIST_BUNDLE_ID: ${{ github.event.inputs.bundle_id }}
+          TUIST_MARKETING_VERSION: ${{ github.event.inputs.marketing_version }}
+          TUIST_PROJECT_VERSION: ${{ github.event.inputs.project_version }}
+        run: |
+          xcodebuild -workspace MedianIOS.xcworkspace -scheme Median -configuration Release -sdk iphoneos -archivePath build/App.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" archive
+          mkdir -p build/Payload
+          cp -R build/App.xcarchive/Products/Applications/*.app build/Payload/
+          cd build && zip -r App-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iOS-IPA-${{ github.event.inputs.bundle_id }}
+          path: ios/build/App-unsigned.ipa
