@@ -44,13 +44,26 @@ jobs:
           TUIST_PROJECT_VERSION: ${{ github.event.inputs.project_version }}
         run: |
           rm -f ~/.swiftpm/security/fingerprints/median.go-native-core.json || true
+          mkdir -p ~/.swiftpm/configuration MedianIOS.xcworkspace/xcshareddata/swiftpm/configuration
+          cat << 'REGJSON' > ~/.swiftpm/configuration/registries.json
+          {
+            "authentication": {},
+            "registries": {
+              "[default]": {
+                "supportsAvailability": false,
+                "url": "https://packages.median.co"
+              },
+              "median": {
+                "supportsAvailability": false,
+                "url": "https://packages.median.co"
+              }
+            },
+            "version": 1
+          }
+          REGJSON
+          cp ~/.swiftpm/configuration/registries.json MedianIOS.xcworkspace/xcshareddata/swiftpm/configuration/registries.json
           tuist install || true
           tuist generate --no-open
-          mkdir -p ~/.swiftpm/configuration MedianIOS.xcworkspace/xcshareddata/swiftpm/configuration
-          if [ -f EduKitCngcvphnmmd.xcworkspace/xcshareddata/swiftpm/configuration/registries.json ]; then
-            cp EduKitCngcvphnmmd.xcworkspace/xcshareddata/swiftpm/configuration/registries.json ~/.swiftpm/configuration/registries.json
-            cp EduKitCngcvphnmmd.xcworkspace/xcshareddata/swiftpm/configuration/registries.json MedianIOS.xcworkspace/xcshareddata/swiftpm/configuration/registries.json
-          fi
 
       - name: Build ứng dụng (Unsigned .xcarchive & đóng gói .ipa)
         env:
@@ -59,16 +72,7 @@ jobs:
           TUIST_MARKETING_VERSION: ${{ github.event.inputs.marketing_version }}
           TUIST_PROJECT_VERSION: ${{ github.event.inputs.project_version }}
         run: |
-          xcodebuild \
-            -workspace MedianIOS.xcworkspace \
-            -scheme Median \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath build/App.xcarchive \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            archive
+          xcodebuild             -workspace MedianIOS.xcworkspace             -scheme Median             -configuration Release             -sdk iphoneos             -archivePath build/App.xcarchive             CODE_SIGNING_ALLOWED=NO             CODE_SIGNING_REQUIRED=NO             CODE_SIGN_IDENTITY=""             archive
 
           mkdir -p build/Payload
           cp -R build/App.xcarchive/Products/Applications/*.app build/Payload/
